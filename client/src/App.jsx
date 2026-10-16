@@ -26,8 +26,11 @@ async function request(path, options) {
     ...options,
     headers: { "Content-Type": "application/json", ...options?.headers },
   });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || "Could not complete the request.");
+  const isJson = response.headers.get("content-type")?.includes("application/json");
+  const result = isJson ? await response.json().catch(() => ({})) : {};
+  if (!response.ok) {
+    throw new Error(result.message || (response.status >= 500 ? "The LocalFix service is temporarily unavailable." : "Could not complete the request."));
+  }
   return result;
 }
 
@@ -40,6 +43,8 @@ function App() {
   const [area, setArea] = useState("");
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchError, setSearchError] = useState("");
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [ownedProvider, setOwnedProvider] = useState(null);
@@ -64,14 +69,17 @@ function App() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
-      setError("");
+      setSearchError("");
       const params = new URLSearchParams({ lng: String(location.lng), lat: String(location.lat), radius: String(radius), category });
       if (specialty) params.set("specialty", specialty);
       try {
         const result = await request(`/providers/search?${params}`, { signal: controller.signal });
         setProviders(result.data || []);
       } catch (requestError) {
-        if (requestError.name !== "AbortError") setError(requestError.message);
+        if (requestError.name !== "AbortError") {
+          setProviders([]);
+          setSearchError(requestError.name === "TypeError" ? "Can't reach LocalFix. Check your connection and try again." : requestError.message);
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -80,7 +88,7 @@ function App() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [location, radius, category, specialty]);
+  }, [location, radius, category, specialty, searchAttempt]);
 
   function selectCategory(slug) {
     setCategory(slug);
@@ -185,8 +193,8 @@ function App() {
         </section>
 
         <section className="results-section" aria-labelledby="results-heading">
-          <div className="results-heading"><div><p className="eyebrow">02 / READY TO HELP</p><h2 id="results-heading">Available near you <span className="result-count">{loading ? "..." : String(providers.length).padStart(2, "0")}</span></h2></div><span className="sort-note"><span className="live-dot" />Closest first</span></div>
-          {loading ? <div className="loading-state"><span className="spinner" />Looking for nearby experts...</div> : providers.length ? <div className="provider-list">{providers.map((provider) => <ProviderCard key={provider._id} provider={provider} />)}</div> : <div className="empty-state"><Search size={23} /><div><strong>No available pros in this radius.</strong><span>Try a wider search or choose a different problem.</span></div><button onClick={() => setRadius(Math.min(50, radius + 10))}>Expand search <ArrowRight size={15} /></button></div>}
+          <div className="results-heading"><div><p className="eyebrow">02 / READY TO HELP</p><h2 id="results-heading">Available near you <span className="result-count">{loading ? "..." : searchError ? "!" : String(providers.length).padStart(2, "0")}</span></h2></div><span className="sort-note"><span className="live-dot" />Closest first</span></div>
+          {loading ? <div className="loading-state"><span className="spinner" />Looking for nearby experts...</div> : searchError ? <div className="empty-state" role="alert"><CircleAlert size={23} /><div><strong>Nearby search is unavailable.</strong><span>{searchError}</span></div><button onClick={() => setSearchAttempt((attempt) => attempt + 1)}>Try again <ArrowRight size={15} /></button></div> : providers.length ? <div className="provider-list">{providers.map((provider) => <ProviderCard key={provider._id} provider={provider} />)}</div> : <div className="empty-state"><Search size={23} /><div><strong>No available pros in this radius.</strong><span>Try a wider search or choose a different problem.</span></div><button onClick={() => setRadius(Math.min(50, radius + 10))}>Expand search <ArrowRight size={15} /></button></div>}
         </section>
 
         <footer className="page-footer"><span>LOCALFIX <span className="brand-period">●</span> LOCAL EXPERTS, DIRECTLY</span><button onClick={() => setModalOpen(true)}>Are you a technician? <ArrowRight size={14} /></button><span className="footer-note"><ShieldCheck size={13} /> Call and confirm details with your pro.</span></footer>

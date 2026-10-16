@@ -7,14 +7,15 @@ const categories = ["plumbing", "electrical", "hvac", "carpentry"];
 
 router.post("/", async (request, response, next) => {
   try {
+    const body = request.body && typeof request.body === "object" ? request.body : {};
     const {
-      fullName = request.body.name,
+      fullName = body.name,
       phone,
-      categorySlug = request.body.category,
+      categorySlug = body.category,
       specialties = [],
-      experienceYears = request.body.experience ?? 0,
-      coordinates = request.body.location?.coordinates,
-    } = request.body;
+      experienceYears = body.experience ?? 0,
+      coordinates = body.location?.coordinates,
+    } = body;
 
     if (!Array.isArray(coordinates) || coordinates.length !== 2) {
       return response.status(400).json({ message: "Provide coordinates as [longitude, latitude]." });
@@ -43,11 +44,16 @@ router.patch("/:id/availability", async (request, response, next) => {
       return response.status(400).json({ message: "Invalid provider ID." });
     }
 
+    const body = request.body && typeof request.body === "object" ? request.body : {};
+    if (Object.hasOwn(body, "isAvailable") && typeof body.isAvailable !== "boolean") {
+      return response.status(400).json({ message: "isAvailable must be a boolean." });
+    }
+
     let provider;
-    if (typeof request.body?.isAvailable === "boolean") {
+    if (typeof body.isAvailable === "boolean") {
       provider = await Provider.findByIdAndUpdate(
         request.params.id,
-        { isAvailable: request.body.isAvailable },
+        { isAvailable: body.isAvailable },
         { new: true, runValidators: true }
       );
     } else {
@@ -80,6 +86,9 @@ router.get("/search", async (request, response, next) => {
     }
     if (category && !categories.includes(category)) {
       return response.status(400).json({ message: "Unknown service category." });
+    }
+    if (specialty !== undefined && (typeof specialty !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(specialty))) {
+      return response.status(400).json({ message: "Specialty must be a valid problem slug." });
     }
 
     const query = { isAvailable: true };

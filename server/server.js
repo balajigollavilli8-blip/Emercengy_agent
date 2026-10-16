@@ -20,7 +20,10 @@ app.use("/api/providers", providerRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);
-  response.status(500).json({ message: "Something went wrong. Please try again." });
+  const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 500 ? error.status : 500;
+  response.status(status).json({
+    message: status < 500 ? error.message : "Something went wrong. Please try again.",
+  });
 });
 
 async function start() {
