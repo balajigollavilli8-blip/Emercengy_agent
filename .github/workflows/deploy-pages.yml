@@ -44,6 +44,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Enable GitHub Pages workflow deployments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if pages_config=$(gh api "repos/${GITHUB_REPOSITORY}/pages" 2>/dev/null); then
+            build_type=$(printf '%s' "$pages_config" | jq -r '.build_type')
+            if [ "$build_type" != "workflow" ]; then
+              gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
+            fi
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
+          fi
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
