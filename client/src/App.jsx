@@ -5,7 +5,7 @@ import {
   SlidersHorizontal, Star, Thermometer, Wrench, X,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const API_BASE = import.meta.env.VITE_API_URL || `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 const DEFAULT_LOCATION = { lat: 17.385, lng: 78.4867, label: "Hyderabad, India" };
 const CATEGORIES = [
   { slug: "plumbing", name: "Plumbing", icon: Wrench, note: "Leaks, drains, pipes", tint: "sage" },
@@ -29,7 +29,12 @@ async function request(path, options) {
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const result = isJson ? await response.json().catch(() => ({})) : {};
   if (!response.ok) {
-    throw new Error(result.message || (response.status >= 500 ? "The LocalFix service is temporarily unavailable." : "Could not complete the request."));
+    const fallbackMessage = response.status === 404
+      ? "The LocalFix API isn't connected to this site yet."
+      : response.status >= 500
+        ? "The LocalFix service is temporarily unavailable."
+        : "Could not complete the request.";
+    throw new Error(result.message || fallbackMessage);
   }
   return result;
 }
